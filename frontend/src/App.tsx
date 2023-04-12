@@ -73,9 +73,11 @@ import {
   ForwardMsg,
   ForwardMsgMetadata,
   GitInfo,
+  LanguageInfo,
   IAppPage,
   ICustomThemeConfig,
   IGitInfo,
+  ILanguageInfo,
   Initialize,
   NewSession,
   PageConfig,
@@ -117,7 +119,7 @@ import { SegmentMetricsManager } from "./lib/SegmentMetricsManager"
 import { StreamlitEndpoints } from "./lib/StreamlitEndpoints"
 
 import { StyledApp } from "./styled-components"
-
+import { LanguagePicker } from "./components/core/LanguagePicker"
 import withHostCommunication, {
   HostCommunicationHOC,
 } from "./hocs/withHostCommunication"
@@ -160,6 +162,7 @@ interface State {
   toolbarMode: Config.ToolbarMode
   themeHash: string | null
   gitInfo: IGitInfo | null
+  languageInfo: ILanguageInfo | null
   formsData: FormsData
   hideTopBar: boolean
   hideSidebarNav: boolean
@@ -175,6 +178,8 @@ declare global {
   interface Window {
     streamlitDebug: any
     iFrameResizer: any
+    languagePickerHold: boolean
+    languagePickerCollapseHandler: any
   }
 }
 
@@ -251,6 +256,7 @@ export class App extends PureComponent<Props, State> {
       scriptFinishedHandlers: [],
       themeHash: null,
       gitInfo: null,
+      languageInfo: null,
       formsData: createFormsData(),
       appPages: [],
       currentPageScriptHash: "",
@@ -521,6 +527,12 @@ export class App extends PureComponent<Props, State> {
     })
   }
 
+  handleLanguageInfoChanged = (languageInfo: ILanguageInfo): void => {
+    this.setState({
+      languageInfo,
+    })
+  }
+
   /**
    * Callback when we get a message from the server.
    */
@@ -558,6 +570,8 @@ export class App extends PureComponent<Props, State> {
           this.handlePageNotFound(pageNotFound),
         gitInfoChanged: (gitInfo: GitInfo) =>
           this.handleGitInfoChanged(gitInfo),
+        languageInfoChanged: (languageInfo: LanguageInfo) =>
+          this.handleLanguageInfoChanged(languageInfo),
         scriptFinished: (status: ForwardMsg.ScriptFinishedStatus) =>
           this.handleScriptFinished(status),
         pageProfile: (pageProfile: PageProfile) =>
@@ -1014,6 +1028,8 @@ export class App extends PureComponent<Props, State> {
           this.setAndSendTheme(dark)
         } else noop() // Do nothing when ?embed_options=[light,dark]_theme is not set
 
+        this.sendLoadLanguageInfoBackMsg()
+
         // Notify any subscribers of this event (and do it on the next cycle of
         // the event loop)
         this.state.scriptFinishedHandlers.map(handler => handler())
@@ -1226,6 +1242,22 @@ export class App extends PureComponent<Props, State> {
     this.sendBackMsg(
       new BackMsg({
         loadGitInfo: true,
+      })
+    )
+  }
+
+  sendLoadLanguageInfoBackMsg = (changeLanguage?: string | null): void => {
+    if (!this.isServerConnected()) {
+      logError(
+        "Cannot load language information when disconnected from server."
+      )
+      return
+    }
+
+    this.sendBackMsg(
+      new BackMsg({
+        loadLanguageInfo: true,
+        changeLanguage: changeLanguage,
       })
     )
   }
@@ -1685,6 +1717,12 @@ export class App extends PureComponent<Props, State> {
               }
             />
             {renderedDialog}
+            <LanguagePicker
+              languageInfo={this.state.languageInfo}
+              sendLoadLanguageInfoBackMsg={this.sendLoadLanguageInfoBackMsg.bind(
+                this
+              )}
+            />
           </StyledApp>
         </HotKeys>
       </AppContext.Provider>
