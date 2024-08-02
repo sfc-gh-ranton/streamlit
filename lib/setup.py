@@ -15,12 +15,14 @@
 import os
 import setuptools
 import sys
+import subprocess
 
 from setuptools.command.install import install
 
 try:
     from pipenv.project import Project
-    from pipenv.utils import convert_deps_to_pip
+    #from pipenv.utils import convert_deps_to_pip
+    #from pipenv.utils.dependencies import convert_deps_to_pip
 except:
     exit_msg = (
         "pipenv is required to package Streamlit. Please install pipenv and try again"
@@ -43,8 +45,23 @@ LONG_DESCRIPTION = (
 pipfile = Project(chdir=False).parsed_pipfile
 
 packages = pipfile["packages"].copy()
-requirements = convert_deps_to_pip(packages, r=False)
 
+def grab_requirements():
+    os.environ['PIPENV_VERBOSITY'] = '-1'
+    output = subprocess.run(["pipenv", "requirements"], capture_output=True)
+    print(f"output:\n{output}")
+    results = output.stdout.decode('UTF8')
+    lines = results.splitlines()
+    requirements = [line for line in lines if not line.strip().startswith("-i")]
+    if output.stderr:
+        print(f"stderr from pipenv: {output.stderr}")
+
+    return requirements
+
+
+#requirements = convert_deps_to_pip(packages, r=False)
+requirements = grab_requirements()
+print("Requirements:\n", '\n'.join(requirements), "\n--\n")
 
 class VerifyVersionCommand(install):
     """Custom command to verify that the git tag matches our version"""
