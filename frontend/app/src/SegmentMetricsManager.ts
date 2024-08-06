@@ -25,6 +25,7 @@ import {
   DeployedAppMetadata,
   Element,
   IS_DEV_ENV,
+  IS_SHARED_REPORT,
   logAlways,
   SessionInfo,
 } from "@streamlit/lib"
@@ -92,7 +93,7 @@ export class SegmentMetricsManager {
     this.initialized = true
     this.actuallySendMetrics = gatherUsageStats
 
-    if (this.actuallySendMetrics) {
+    if (this.actuallySendMetrics || IS_SHARED_REPORT) {
       // Segment will not initialize if this is rendered with SSR
       initializeSegment()
       this.sendPendingEvents()

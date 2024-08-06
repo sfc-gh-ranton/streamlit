@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Iterator
 
 from streamlit.proto.ForwardMsg_pb2 import ForwardMsg
 
@@ -117,6 +117,12 @@ class ForwardMsgQueue:
 
     def __len__(self) -> int:
         return len(self._queue)
+
+    def __iter__(self) -> Iterator[ForwardMsg]:
+        return iter(self._queue)
+
+    def __next__(self) -> Any:
+        return next(self._queue)
 
 
 def _is_composable_message(msg: ForwardMsg) -> bool:

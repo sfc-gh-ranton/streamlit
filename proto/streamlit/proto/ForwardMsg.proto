@@ -69,8 +69,18 @@ message ForwardMsg {
     GitInfo git_info_changed = 14;
     PageProfile page_profile = 18;
 
+    // Upload progress messages.
+
+    // Indicates the % progress of a report upload.
+    uint32 upload_report_progress = 7;
+
+    // Indicates that the upload is complete and gives the URL.
+    string report_uploaded = 8;
+
     // Status change and event messages.
     SessionStatus session_status_changed = 9;
+
+    // A SessionEvent was emitted.
     SessionEvent session_event = 10;
 
     // Other messages.
@@ -98,7 +108,6 @@ message ForwardMsg {
   // testing.
   string debug_last_backmsg_id = 17;
 
-  reserved 7, 8;
   // Next: 24
 }
 

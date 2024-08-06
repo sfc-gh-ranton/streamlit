@@ -13,13 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { ReactNode } from "react"
 
+import { ReactNode } from "react"
+import { BackMsg, ForwardMsg, StaticManifest } from "@streamlit/lib"
+import { BaseUriParts } from "@streamlit/lib"
+import { IS_SHARED_REPORT } from "@streamlit/lib/src/baseconsts"
+import url from "url"
 import {
-  BackMsg,
-  BaseUriParts,
   ensureError,
-  ForwardMsg,
   getPossibleBaseUris,
   IHostConfigResponse,
   logError,
@@ -28,6 +29,10 @@ import {
 } from "@streamlit/lib"
 
 import { ConnectionState } from "./ConnectionState"
+
+import { getReportObject } from "@streamlit/lib"
+
+import { StaticConnection } from "./StaticConnection"
 import { WebsocketConnection } from "./WebsocketConnection"
 
 /**
@@ -87,7 +92,7 @@ interface Props {
 export class ConnectionManager {
   private readonly props: Props
 
-  private connection?: WebsocketConnection
+  private connection?: WebsocketConnection | StaticConnection
 
   private connectionState: ConnectionState = ConnectionState.INITIAL
 
@@ -103,6 +108,11 @@ export class ConnectionManager {
    */
   public isConnected(): boolean {
     return this.connectionState === ConnectionState.CONNECTED
+  }
+
+  // A "static" connection is the one that runs in S3
+  public isStaticConnection(): boolean {
+    return this.connectionState === ConnectionState.STATIC
   }
 
   /**
@@ -138,9 +148,16 @@ export class ConnectionManager {
 
   private async connect(): Promise<void> {
     try {
-      this.connection = await this.connectToRunningServer()
+      if (IS_SHARED_REPORT) {
+        const { query } = url.parse(window.location.href, true)
+        const scriptRunId = query.id as string
+        this.connection = await this.connectBasedOnManifest(scriptRunId)
+      } else {
+        this.connection = await this.connectToRunningServer()
+      }
     } catch (e) {
       const err = ensureError(e)
+
       logError(err.message)
       this.setConnectionState(
         ConnectionState.DISCONNECTED_FOREVER,
@@ -175,6 +192,7 @@ export class ConnectionManager {
     // used in tests.
     _retryTimeout: number
   ): void => {
+    // TODO: it seems like nothing ever increments this!
     if (totalRetries === RETRY_COUNT_FOR_WARNING) {
       this.props.onConnectionError(latestError)
     }
@@ -194,5 +212,78 @@ export class ConnectionManager {
       resetHostAuthToken: this.props.resetHostAuthToken,
       onHostConfigResp: this.props.onHostConfigResp,
     })
+  }
+
+  /**
+   * Opens either a static connection or a websocket connection, based on what
+   * the manifest says.
+   */
+  private async connectBasedOnManifest(
+    scriptRunId: string
+  ): Promise<WebsocketConnection | StaticConnection> {
+    const manifest = await ConnectionManager.fetchManifest(scriptRunId)
+
+    return manifest.serverStatus === StaticManifest.ServerStatus.RUNNING
+      ? this.connectToRunningServerFromManifest(manifest)
+      : this.connectToStaticReportFromManifest(scriptRunId, manifest)
+  }
+
+  private connectToRunningServerFromManifest(
+    manifest: any
+  ): WebsocketConnection {
+    const {
+      configuredServerAddress,
+      internalServerIP,
+      externalServerIP,
+      serverPort,
+      serverBasePath,
+    } = manifest
+
+    const parts = { port: serverPort, basePath: serverBasePath }
+
+    const baseUriPartsList = configuredServerAddress
+      ? [{ ...parts, host: configuredServerAddress }]
+      : [
+          { ...parts, host: externalServerIP },
+          { ...parts, host: internalServerIP },
+        ]
+
+    return new WebsocketConnection({
+      sessionInfo: this.props.sessionInfo,
+      endpoints: this.props.endpoints,
+      baseUriPartsList,
+      onMessage: this.props.onMessage,
+      onConnectionStateChange: s => this.setConnectionState(s),
+      onRetry: this.showRetryError,
+      claimHostAuthToken: this.props.claimHostAuthToken,
+      resetHostAuthToken: this.props.resetHostAuthToken,
+      onHostConfigResp: this.props.onHostConfigResp,
+    })
+  }
+
+  private connectToStaticReportFromManifest(
+    scriptRunId: string,
+    manifest: StaticManifest
+  ): StaticConnection {
+    return new StaticConnection({
+      manifest,
+      scriptRunId,
+      onMessage: this.props.onMessage,
+      onConnectionStateChange: s => this.setConnectionState(s),
+    })
+  }
+
+  private static async fetchManifest(
+    scriptRunId: string
+  ): Promise<StaticManifest> {
+    try {
+      const data = await getReportObject(scriptRunId, "manifest.pb")
+      const arrayBuffer = await data.arrayBuffer()
+
+      return StaticManifest.decode(new Uint8Array(arrayBuffer))
+    } catch (err) {
+      logError(err)
+      throw new Error("Unable to fetch data.")
+    }
   }
 }

@@ -50,14 +50,16 @@ class FragmentHandledException(Exception):
     when it has handled the exception itself.
     """
 
+
+class S3NoCredentials(Exception):
+    pass
+
+
+class NoSessionContext(Exception):
     pass
 
 
 class NoStaticFiles(Error):
-    pass
-
-
-class NoSessionContext(Error):
     pass
 
 

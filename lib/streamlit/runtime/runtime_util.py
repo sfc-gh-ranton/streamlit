@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from streamlit import config
+from streamlit import config, url_util
 from streamlit.errors import MarkdownFormattedException, StreamlitAPIException
 from streamlit.runtime.forward_msg_cache import populate_hash_if_needed
 
@@ -104,3 +104,22 @@ def get_max_message_size_bytes() -> int:
         _max_message_size_bytes = config.get_option("server.maxMessageSize") * int(1e6)
 
     return _max_message_size_bytes
+
+
+def _get_server_address_if_manually_set() -> str | None:
+    if config.is_manually_set("browser.serverAddress"):
+        return url_util.get_hostname(config.get_option("browser.serverAddress"))
+    return None
+
+
+def _get_s3_url_host_if_manually_set() -> str | None:
+    if config.is_manually_set("s3.url"):
+        return url_util.get_hostname(config.get_option("s3.url"))
+    return None
+
+
+def make_url_path_regex(*path, **kwargs) -> str:
+    """Get a regex of the form ^/foo/bar/baz/?$ for a path (foo, bar, baz)."""
+    path = [x.strip("/") for x in path if x]  # Filter out falsy components.
+    path_format = r"^/%s/?$" if kwargs.get("trailing_slash", True) else r"^/%s$"
+    return path_format % "/".join(path)

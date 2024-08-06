@@ -20,4 +20,5 @@ export enum ConnectionState {
   INITIAL = "INITIAL",
   PINGING_SERVER = "PINGING_SERVER",
   CONNECTING = "CONNECTING",
+  STATIC = "STATIC",
 }

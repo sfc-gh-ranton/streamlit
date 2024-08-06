@@ -212,6 +212,7 @@ const getProps = (extend?: Partial<Props>): Props => ({
 const NEW_SESSION_JSON: INewSession = {
   name: "scriptName",
   config: {
+    sharingEnabled: false,
     gatherUsageStats: false,
     maxCachedMessageAge: 0,
     mapboxToken: "mapboxToken",

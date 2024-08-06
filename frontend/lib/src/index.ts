@@ -17,6 +17,7 @@
 // These imports are each exported specifically in order to minimize public apis.
 export {
   IS_DEV_ENV,
+  IS_SHARED_REPORT,
   RERUN_PROMPT_MODAL_DIALOG,
   WEBSOCKET_PORT_DEV,
 } from "./baseconsts"
@@ -130,4 +131,6 @@ export { default as AlertElement } from "./components/elements/AlertElement"
 export { default as TextElement } from "./components/elements/TextElement"
 export { default as useScrollToBottom } from "./hooks/useScrollToBottom"
 export { RootStyleProvider } from "./RootStyleProvider"
+export { getReportObject } from "./s3helper"
+
 export * from "./proto"
