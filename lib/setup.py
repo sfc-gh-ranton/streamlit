@@ -76,6 +76,14 @@ EXTRA_REQUIRES = {
     ]
 }
 
+# Add boto3 for static report sharing only.
+STATIC_SHARING_DEPENDENCIES = [
+    "boto3>=0.0",  # TODO: update
+]
+
+if os.getenv("STATIC_SHARING_ENABLED"):
+    INSTALL_REQUIRES.extend(STATIC_SHARING_DEPENDENCIES)
+
 
 class VerifyVersionCommand(install):
     """Custom command to verify that the git tag matches our version"""

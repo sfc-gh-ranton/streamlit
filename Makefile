@@ -90,6 +90,10 @@ python-init-all:
 python-init-dev-only:
 	INSTALL_DEV_REQS=true INSTALL_TEST_REQS=false make python-init
 
+.PHONY: python-init-sharing-dev-only
+python-init-sharing-dev-only:
+	STATIC_SHARING_ENABLED=true INSTALL_DEV_REQS=true INSTALL_TEST_REQS=false make python-init
+
 .PHONY: python-init-test-only
 # Install Streamlit and test requirements
 python-init-test-only: lib/test-requirements.txt
