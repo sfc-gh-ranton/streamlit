@@ -76,6 +76,7 @@ jest.mock("@streamlit/app/src/connection/ConnectionManager", () => {
       props,
       connect: jest.fn(),
       isConnected: jest.fn(),
+      isStaticConnection: jest.fn(),
       disconnect: jest.fn(),
       sendMessage: jest.fn(),
       incrementMessageCacheRunCount: jest.fn(),
@@ -1966,7 +1967,7 @@ describe("App", () => {
       // ConnectionState.CONNECTED. Moving from CONNECTED to any other state
       // should cause us to send a WEBSOCKET_DISCONNECTED message.
       act(() =>
-        // @ts-expect-error - connectionManager.props is private
+        // @ts-expect-error - ConnectionManager.props is private
         connectionManager.props.connectionStateChanged(
           ConnectionState.PINGING_SERVER
         )

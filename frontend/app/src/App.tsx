@@ -432,6 +432,8 @@ export class App extends PureComponent<Props, State> {
   }
 
   initializeConnectionManager(): void {
+    console.log("in initializeConnectionManager") // TODO: remove
+
     this.connectionManager = new ConnectionManager({
       sessionInfo: this.sessionInfo,
       endpoints: this.endpoints,
@@ -469,6 +471,17 @@ export class App extends PureComponent<Props, State> {
         this.setLibConfig(libConfig)
       },
     })
+
+    console.log(
+      `new this.connectionManager is: ${JSON.stringify(
+        this.connectionManager
+      )}`
+    ) // TODO:
+    const isConnected: boolean = this.connectionManager.isConnected()
+    console.log(`isConnected is ${isConnected}`)
+
+    const isStatic = this.connectionManager.isStaticConnection()
+    console.log(`isStatic is ${isStatic}`)
   }
 
   componentDidMount(): void {
@@ -1339,6 +1352,17 @@ export class App extends PureComponent<Props, State> {
       // the app immediately to avoid race condition.
       // The one exception is static connections, which do not depend on
       // the report state (and don't have a stop button).
+      console.log(
+        `this.connectionManager is: ${JSON.stringify(this.connectionManager)}`
+      ) // TODO:
+      if (this.connectionManager) {
+        console.log(
+          `typeof(this.connectionManager.isStaticConnection) is: ${typeof this
+            .connectionManager.isStaticConnection}`
+        )
+      } else {
+        console.log("this.connectionManager is null")
+      }
       const isStaticConnection = this.connectionManager
         ? this.connectionManager.isStaticConnection()
         : false

@@ -78,7 +78,8 @@ EXTRA_REQUIRES = {
 
 # Add boto3 for static report sharing only.
 STATIC_SHARING_DEPENDENCIES = [
-    "boto3>=0.0",  # TODO: update
+    "boto3>=1.34",
+    "base58>=2.1.1",
 ]
 
 if os.getenv("STATIC_SHARING_ENABLED"):

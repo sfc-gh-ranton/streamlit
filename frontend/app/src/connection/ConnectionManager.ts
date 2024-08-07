@@ -15,25 +15,31 @@
  */
 
 import { ReactNode } from "react"
-import { BackMsg, ForwardMsg, StaticManifest } from "@streamlit/lib"
-import { BaseUriParts } from "@streamlit/lib"
-import { IS_SHARED_REPORT } from "@streamlit/lib/src/baseconsts"
+
 import url from "url"
+import * as console from "node:console"
+
 import {
+  BackMsg,
+  BaseUriParts,
   ensureError,
+  ForwardMsg,
   getPossibleBaseUris,
+  getReportObject,
   IHostConfigResponse,
+  IS_SHARED_REPORT,
   logError,
   SessionInfo,
+  StaticManifest,
   StreamlitEndpoints,
 } from "@streamlit/lib"
 
 import { ConnectionState } from "./ConnectionState"
-
-import { getReportObject } from "@streamlit/lib"
-
 import { StaticConnection } from "./StaticConnection"
 import { WebsocketConnection } from "./WebsocketConnection"
+
+// TODO: import {Promise} from "cypress/types/cy-bluebird";
+// TODO: import * as url from "node:url";
 
 /**
  * When the websocket connection retries this many times, we show a dialog
@@ -44,7 +50,7 @@ import { WebsocketConnection } from "./WebsocketConnection"
  */
 const RETRY_COUNT_FOR_WARNING = 6
 
-interface Props {
+export interface ConnectionManagerProps {
   /** The app's SessionInfo instance */
   sessionInfo: SessionInfo
 
@@ -85,74 +91,58 @@ interface Props {
    */
   onHostConfigResp: (resp: IHostConfigResponse) => void
 }
-
-/**
- * Manages our connection to the Server.
- */
 export class ConnectionManager {
-  private readonly props: Props
+  private readonly props: ConnectionManagerProps
 
   private connection?: WebsocketConnection | StaticConnection
 
   private connectionState: ConnectionState = ConnectionState.INITIAL
 
-  constructor(props: Props) {
+  constructor(props: ConnectionManagerProps) {
+    // TODO: cleanup
+    console.log(`You called constructor with ${JSON.stringify(props)}`)
     this.props = props
 
-    // This method returns a promise, but we don't care about its result.
-    this.connect()
+    const connectPromise = this.connect()
+    connectPromise.then((value: any) => {
+      console.log(`connect finished: ${value}`)
+    })
+    return this
   }
 
-  /**
-   * Indicates whether we're connected to the server.
-   */
-  public isConnected(): boolean {
-    return this.connectionState === ConnectionState.CONNECTED
+  public disconnect(): void {
+    console.log("You disconnected.") // TODO: cleanup
+    this.connection?.disconnect()
   }
 
-  // A "static" connection is the one that runs in S3
-  public isStaticConnection(): boolean {
-    return this.connectionState === ConnectionState.STATIC
-  }
-
-  /**
-   * Return the BaseUriParts for the server we're connected to,
-   * if we are connected to a server.
-   */
-  public getBaseUriParts(): BaseUriParts | undefined {
-    if (this.connection instanceof WebsocketConnection) {
-      return this.connection.getBaseUriParts()
+  private setConnectionState = (
+    connectionState: ConnectionState,
+    errMsg?: string
+  ): void => {
+    console.log(`You called setConnectionState with ${connectionState}`)
+    if (this.connectionState !== connectionState) {
+      this.connectionState = connectionState
+      this.props.connectionStateChanged(connectionState)
     }
-    return undefined
-  }
 
-  public sendMessage(obj: BackMsg): void {
-    if (this.connection instanceof WebsocketConnection && this.isConnected()) {
-      this.connection.sendMessage(obj)
-    } else {
-      // Don't need to make a big deal out of this. Just print to console.
-      logError(`Cannot send message when server is disconnected: ${obj}`)
-    }
-  }
-
-  /**
-   * Increment the runCount on our message cache, and clear entries
-   * whose age is greater than the max.
-   */
-  public incrementMessageCacheRunCount(maxMessageAge: number): void {
-    // StaticConnection does not use a MessageCache.
-    if (this.connection instanceof WebsocketConnection) {
-      this.connection.incrementMessageCacheRunCount(maxMessageAge)
+    if (errMsg) {
+      this.props.onConnectionError(errMsg)
     }
   }
 
   private async connect(): Promise<void> {
+    console.log("You called connect.") // TODO: cleanup
     try {
       if (IS_SHARED_REPORT) {
         const { query } = url.parse(window.location.href, true)
         const scriptRunId = query.id as string
+        console.log(
+          `connect to shared report based on manifest, scriptRunId: ${scriptRunId}`
+        )
         this.connection = await this.connectBasedOnManifest(scriptRunId)
       } else {
+        console.log("Connecting to running server") // TODO:
+        // TODO: "TS80007: 'await' has no effect on the type of this expression."
         this.connection = await this.connectToRunningServer()
       }
     } catch (e) {
@@ -166,21 +156,41 @@ export class ConnectionManager {
     }
   }
 
-  disconnect(): void {
-    this.connection?.disconnect()
+  public isConnected(): boolean {
+    console.log("You called isConnected.") // TODO: cleanup
+    return this.connectionState === ConnectionState.CONNECTED
   }
 
-  private setConnectionState = (
-    connectionState: ConnectionState,
-    errMsg?: string
-  ): void => {
-    if (this.connectionState !== connectionState) {
-      this.connectionState = connectionState
-      this.props.connectionStateChanged(connectionState)
-    }
+  public isStaticConnection(): boolean {
+    console.log("You called isStaticConnection.") // TODO: cleanup
+    return this.connectionState === ConnectionState.STATIC
+  }
 
-    if (errMsg) {
-      this.props.onConnectionError(errMsg)
+  public incrementMessageCacheRunCount(maxCachedMessageAge: number): void {
+    console.log(
+      `You called incrementMessageCacheRunCount with ${maxCachedMessageAge}`
+    ) // TODO: cleanup
+    // StaticConnection does not use a MessageCache.
+    if (this.connection instanceof WebsocketConnection) {
+      this.connection.incrementMessageCacheRunCount(maxCachedMessageAge)
+    }
+  }
+
+  public getBaseUriParts(): BaseUriParts | undefined {
+    console.log("You called getBaseUriParts.") // TODO: cleanup
+    if (this.connection instanceof WebsocketConnection) {
+      return this.connection.getBaseUriParts()
+    }
+    return undefined
+  }
+
+  public sendMessage(msg: BackMsg): void {
+    console.log(`You called sendMessage with ${msg}`) // TODO: cleanup
+    if (this.connection instanceof WebsocketConnection && this.isConnected()) {
+      this.connection.sendMessage(msg)
+    } else {
+      // Don't need to make a big deal out of this. Just print to console.
+      logError(`Cannot send message when server is disconnected: ${msg}`)
     }
   }
 
