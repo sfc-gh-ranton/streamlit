@@ -45,7 +45,9 @@ describe("getReportObjectPath", () => {
 })
 
 function mockWindowLocationHref(href: string): void {
-  delete global.window.location
+  // TODO: delete global.window.location
+  // @ts-ignore
+  window["location"] = undefined
   global.window = Object.create(window)
   Object.defineProperty(window, "location", {
     value: { href },
