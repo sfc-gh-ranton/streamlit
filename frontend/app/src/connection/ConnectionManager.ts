@@ -17,7 +17,6 @@
 import { ReactNode } from "react"
 
 import url from "url"
-import * as console from "node:console"
 
 import {
   BackMsg,
