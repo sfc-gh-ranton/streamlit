@@ -1045,9 +1045,10 @@ export class App extends PureComponent<Props, State> {
       const config = newSessionProto.config as Config
       const themeInput = newSessionProto.customTheme as CustomThemeConfig
 
+      const sharingEnabled = true // config.sharingEnabled
       this.processThemeInput(themeInput)
       this.setState({
-        sharingEnabled: config.sharingEnabled,
+        sharingEnabled: sharingEnabled,
         allowRunOnSave: config.allowRunOnSave,
         hideTopBar: config.hideTopBar,
         toolbarMode: config.toolbarMode,
@@ -1423,7 +1424,7 @@ export class App extends PureComponent<Props, State> {
   shareReport = (): void => {
     if (this.isServerConnected()) {
       if (this.state.sharingEnabled) {
-        this.MetricsManager.current.enqueue("shareReport")
+        // TODO: this pukes -- // this.MetricsManager.current.enqueue("shareReport")
         const backMsg = new BackMsg({ cloudUpload: true })
         backMsg.type = "cloudUpload"
         this.sendBackMsg(backMsg)

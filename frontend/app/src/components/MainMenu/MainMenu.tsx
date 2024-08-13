@@ -322,6 +322,7 @@ function getPreferredMenuOrder(
     ...(ScreenCastRecorder.isSupportedBrowser()
       ? [coreMenuItems.recordScreencast]
       : []),
+    coreMenuItems.saveSnapshot,
     coreMenuItems.DIVIDER,
     coreMenuItems.report,
     coreMenuItems.community,
@@ -332,7 +333,7 @@ function getPreferredMenuOrder(
 
 function MainMenu(props: Props): ReactElement {
   const isServerDisconnected = !props.isServerConnected
-
+  console.log(`isServerDisconnected = ${isServerDisconnected}`)
   const showAboutMenu =
     props.toolbarMode != Config.ToolbarMode.MINIMAL ||
     (props.toolbarMode == Config.ToolbarMode.MINIMAL &&
@@ -354,7 +355,7 @@ function MainMenu(props: Props): ReactElement {
       stopRecordingIndicator: Boolean(SCREENCAST_LABEL[props.screenCastState]),
     },
     saveSnapshot: {
-      disabled: isServerDisconnected,
+      disabled: false, // TODO: why? isServerDisconnected,
       onClick: props.shareCallback,
       label: "Save a snapshot",
     },
@@ -377,6 +378,7 @@ function MainMenu(props: Props): ReactElement {
       about: { onClick: props.aboutCallback, label: "About" },
     }),
   }
+  console.log(`coreMenuItems = ${JSON.stringify(coreMenuItems)}`)
 
   const coreDevMenuItems = {
     DIVIDER: { isDivider: true },
@@ -398,6 +400,7 @@ function MainMenu(props: Props): ReactElement {
       shortcut: "c",
     },
   }
+  console.log(`coreDevMenuItems = ${JSON.stringify(coreDevMenuItems)}`)
 
   const hostMenuItems = props.hostMenuItems.map(item => {
     if (item.type === "separator") {
@@ -425,13 +428,14 @@ function MainMenu(props: Props): ReactElement {
       label: item.label,
     }
   }, [] as any[])
+  console.log(`hostMenuItems: ${hostMenuItems}`)
 
   const preferredMenuOrder = getPreferredMenuOrder(
     props,
     hostMenuItems,
     coreMenuItems
   )
-
+  console.log(`preferredMenuOrder: ${JSON.stringify(preferredMenuOrder)}`)
   // Remove empty entries, and add dividers into menu options as needed.
   const menuItems: any[] = []
   let lastMenuItem = null
@@ -458,6 +462,7 @@ function MainMenu(props: Props): ReactElement {
     return <></>
   }
 
+  console.log(`menuItems=${JSON.stringify(menuItems)}`)
   return (
     <StatefulPopover
       focusLock
