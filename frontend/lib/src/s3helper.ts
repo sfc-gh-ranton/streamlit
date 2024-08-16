@@ -45,23 +45,27 @@ export function getReportObjectPath(
   }
 
   const objectPath = `reports/${scriptRunId}/${objName}`
-  return resourceRoot === ""
-    ? `/${objectPath}`
-    : `/${resourceRoot}/${objectPath}`
+  const result_url =
+    resourceRoot === "" ? `/${objectPath}` : `/${resourceRoot}/${objectPath}`
+  console.log(
+    `getReportObjectPath of ${scriptRunId}, ${objName} -> ${result_url}`
+  ) // TODO: cleanup
+  return result_url
 }
 
 /**
  * Fetch a static report resource from S3. Error if it doesn't exist.
  *
- * @param sessionId the report ID of the resource to fetch
+ * @param scriptRunId the report ID of the resource to fetch
  * @param objName the name of the resource to fetch
  */
 export async function getReportObject(
+  baseReportUrl: string,
   scriptRunId: string,
   objName: string
 ): Promise<Response> {
   const response = await fetch(
-    getReportObjectPath(scriptRunId, objName),
+    baseReportUrl + getReportObjectPath(scriptRunId, objName),
     FETCH_PARAMS
   )
 

@@ -14,11 +14,11 @@
 
 """Handles a connecton to an S3 bucket to send Report data."""
 
+import asyncio
 import hashlib
 import os
 
 import base58
-from tornado import gen, locks
 
 import streamlit
 from streamlit import errors, util
@@ -45,12 +45,11 @@ class AbstractStorage:
             streamlit.__version__,
             base58.b58encode(md5.digest()[:3]).decode("utf-8"),
         )
-        self._write_lock = locks.Lock()
+        self._write_lock = asyncio.Lock()
 
     def __repr__(self) -> str:
         return util.repr_(self)
 
-    @gen.coroutine
     def save_report_files(
         self, session_id, files, progress_coroutine=None, manifest_save_order=None
     ):
@@ -66,7 +65,7 @@ class AbstractStorage:
 
             [
                 (filename_1, raw_data_1),
-                (filename_2, raw_data_2), etc..
+                (filename_2, raw_data_2), etc.
             ]
 
             ...where filename_x is the relative path to a file, including the
@@ -90,17 +89,16 @@ class AbstractStorage:
             the url for the saved report.
 
         """
-        return_value = None
-        with (yield self._write_lock.acquire()):
-            return_value = yield self._save_report_files(
+        # return_value = None
+        async with self._write_lock:
+            return_value = self._save_report_files(
                 session_id,
                 files,
                 progress_coroutine=progress_coroutine,
                 manifest_save_order=manifest_save_order,
             )
-        raise gen.Return(return_value)
+            return return_value
 
-    @gen.coroutine
     def _save_report_files(
         self, session_id, files, progress_coroutine=None, manifest_save_order=None
     ):
@@ -164,8 +162,8 @@ def _get_static_files(static_dir):
         for filename in filenames:
             absolute_name = os.path.join(root, filename)
             relative_name = os.path.relpath(absolute_name, static_dir)
-            with open(absolute_name, "rb") as input:
-                file_data = input.read()
+            with open(absolute_name, "rb") as input_file:
+                file_data = input_file.read()
                 file_tuple = (relative_name, file_data)
 
                 if relative_name == "index.html":

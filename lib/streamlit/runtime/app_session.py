@@ -15,13 +15,15 @@
 from __future__ import annotations
 
 import asyncio
+import builtins
+import copy
 import sys
 import uuid
 from enum import Enum
 from typing import TYPE_CHECKING, Callable, Final
 
 import streamlit.elements.exception as exception_utils
-from streamlit import config, runtime
+from streamlit import config, net_util, runtime, url_util
 from streamlit.case_converters import to_snake_case
 from streamlit.logger import get_logger
 from streamlit.proto.ClientState_pb2 import ClientState
@@ -34,6 +36,7 @@ from streamlit.proto.NewSession_pb2 import (
     NewSession,
     UserInfo,
 )
+from streamlit.proto.StaticManifest_pb2 import StaticManifest
 from streamlit.runtime import caching
 from streamlit.runtime.forward_msg_queue import ForwardMsgQueue
 from streamlit.runtime.fragment import FragmentStorage, MemoryFragmentStorage
@@ -41,6 +44,7 @@ from streamlit.runtime.metrics_util import Installation
 from streamlit.runtime.pages_manager import PagesManager
 from streamlit.runtime.scriptrunner import RerunData, ScriptRunner, ScriptRunnerEvent
 from streamlit.runtime.secrets import secrets_singleton
+from streamlit.storage.file_storage import FileStorage
 from streamlit.version import STREAMLIT_VERSION_STRING
 from streamlit.watcher import LocalSourcesWatcher
 
@@ -138,6 +142,7 @@ class AppSession:
         # delivered to the browser. Periodically, the server flushes
         # this queue and delivers its contents to the browser.
         self._browser_queue = ForwardMsgQueue()
+        self._master_queue = ForwardMsgQueue()
         self._message_enqueued_callback = message_enqueued_callback
 
         self._state = AppSessionState.APP_NOT_RUNNING
@@ -165,6 +170,7 @@ class AppSession:
 
         self._debug_last_backmsg_id: str | None = None
 
+        self._storage = None  # TODO: rename, report storage.
         self._fragment_storage: FragmentStorage = MemoryFragmentStorage()
 
         _LOGGER.debug("AppSession initialized (id=%s)", self.id)
@@ -276,6 +282,7 @@ class AppSession:
             msg.debug_last_backmsg_id = self._debug_last_backmsg_id
 
         self._browser_queue.enqueue(msg)
+        self._master_queue.enqueue(msg)
         if self._message_enqueued_callback:
             self._message_enqueued_callback()
 
@@ -283,11 +290,11 @@ class AppSession:
         """Process a BackMsg."""
         try:
             msg_type = msg.WhichOneof("type")
-
-            if msg_type == "rerun_script":
+            if msg_type == "cloud_upload":
+                self.handle_save_request()
+            elif msg_type == "rerun_script":
                 if msg.debug_last_backmsg_id:
                     self._debug_last_backmsg_id = msg.debug_last_backmsg_id
-
                 self._handle_rerun_script_request(msg.rerun_script)
             elif msg_type == "load_git_info":
                 self._handle_git_information_request()
@@ -336,6 +343,187 @@ class AppSession:
         self._event_loop.call_soon_threadsafe(
             lambda: self._enqueue_forward_msg(self._create_exception_message(e))
         )
+
+    def handle_save_request(self) -> None:
+        # TODO: this feature originally sent messages for reporting progress.
+        #  msg.file_urls_response.response_id = file_urls_request.request_id
+
+        # msg = ForwardMsg()
+        #     """Save serialized version of report deltas to the cloud.
+        #     "Progress" ForwardMsgs will be sent to the client during the upload.
+        #     These messages are sent "out of band" - that is, they don't get
+        #     enqueued into the ForwardMsgQueue (because they're not part of the report).
+        #     Instead, they're written directly to the report's WebSocket.
+        #     Parameters
+        #     ----------
+        #     ws : _BrowserWebSocketHandler
+        #         The report's websocket handler.
+        #     """
+
+        def progress(percent):
+            progress_msg = ForwardMsg()
+            progress_msg.upload_report_progress = percent
+            # To do this, have to send these directly without enqueuing them to keep
+            # them from going in the report msgs.
+            # yield ws.write_message(
+            #     server_util.serialize_forward_msg(progress_msg), binary=True
+            # )
+
+        # Indicate that the save is starting.
+        try:
+            # yield progress(0)
+
+            # url = yield self._save_final_report(progress)
+            url = self._save_final_report(progress)
+
+            # Indicate that the save is done.
+            progress_msg = ForwardMsg()
+            progress_msg.report_uploaded = builtins.str(url)
+
+            # yield ws.write_message(
+            #     server_util.serialize_forward_msg(progress_msg), binary=True
+            # )
+
+        except Exception as e:
+            # Horrible hack to show something if something breaks.
+            err_msg = "%s: %s" % (type(e).__name__, str(e) or "No further details.")
+            progress_msg = ForwardMsg()
+            progress_msg.report_uploaded = err_msg
+
+            # yield ws.write_message(
+            #     server_util.serialize_forward_msg(progress_msg), binary=True
+            # )
+
+            _LOGGER.warning("Failed to save report:", exc_info=e)
+
+    def _save_final_report(self, progress_coroutine=None):
+        files = self.serialize_final_report_to_files()
+        url = self._get_storage().save_report_files(self.id, files, progress_coroutine)
+
+        # if config.get_option("server.liveSave"):
+        url_util.print_url("Saved final app", url)
+
+        return url
+
+    def _get_storage(self):
+        if self._storage is None:
+            sharing_mode = config.get_option("global.sharingMode")
+            if sharing_mode == "s3":
+                from streamlit.storage.s3_storage import S3Storage
+
+                self._storage = S3Storage()
+            elif sharing_mode == "file":
+                self._storage = FileStorage()
+            else:
+                raise RuntimeError("Unsupported sharing mode '%s'" % sharing_mode)
+        return self._storage
+
+    def serialize_running_report_to_files(self):
+        """Return a running report as an easily-serializable list of tuples.
+        Returns
+        -------
+        list of tuples
+            See `CloudStorage.save_report_files()` for schema. But as to the
+            output of this method, it's a manifest pointing to the Server
+            so browsers who go to the shareable report URL can connect to it
+            live.
+        """
+        _LOGGER.debug("Serializing running report")
+
+        manifest = self._build_manifest(
+            status=StaticManifest.RUNNING,
+            external_server_ip=net_util.get_external_ip(),
+            internal_server_ip=net_util.get_internal_ip(),
+        )
+
+        return [("reports/%s/manifest.pb" % self.id, manifest.SerializeToString())]
+
+    def serialize_final_report_to_files(self):
+        """Return the report as an easily-serializable list of tuples.
+        Returns
+        -------
+        list of tuples
+            See `CloudStorage.save_report_files()` for schema. But as to the
+            output of this method, it's (1) a simple manifest and (2) a bunch
+            of serialized ForwardMsgs.
+        """
+        _LOGGER.debug("Serializing final report")
+
+        messages = [
+            copy.deepcopy(msg)
+            for msg in self._master_queue
+            if _should_save_report_msg(msg)
+        ]
+
+        manifest = self._build_manifest(
+            status=StaticManifest.DONE, num_messages=len(messages)
+        )
+
+        # Build a list of message tuples: (message_location, serialized_message)
+        message_tuples = [
+            (
+                "reports/%(id)s/%(idx)s.pb" % {"id": self.id, "idx": msg_idx},
+                msg.SerializeToString(),
+            )
+            for msg_idx, msg in enumerate(messages)
+        ]
+
+        manifest_tuples = [
+            (
+                "reports/%(id)s/manifest.pb" % {"id": self.id},
+                manifest.SerializeToString(),
+            )
+        ]
+
+        # Manifest must be at the end, so clients don't connect and read the
+        # manifest while the deltas haven't been saved yet.
+        return message_tuples + manifest_tuples
+
+    def _build_manifest(
+        self,
+        status,
+        num_messages=None,
+        external_server_ip=None,
+        internal_server_ip=None,
+    ):
+        """Build a manifest dict for this report.
+        Parameters
+        ----------
+        status : StaticManifest.ServerStatus
+            The report status. If the script is still executing, then the
+            status should be RUNNING. Otherwise, DONE.
+        num_messages : int or None
+            Set only when status is DONE. The number of ForwardMsgs that this report
+            is made of.
+        external_server_ip : str or None
+            Only when status is RUNNING. The IP of the Server's websocket.
+        internal_server_ip : str or None
+            Only when status is RUNNING. The IP of the Server's websocket.
+        Returns
+        -------
+        StaticManifest
+            A StaticManifest protobuf message
+        """
+
+        manifest = StaticManifest()
+        manifest.name = f"mani_{self.id}"
+        manifest.server_status = status
+
+        if status == StaticManifest.RUNNING:
+            manifest.external_server_ip = external_server_ip
+            manifest.internal_server_ip = internal_server_ip
+            manifest.configured_server_address = config.get_option(
+                "browser.serverAddress"
+            )
+            # Don't use _get_browser_address_bar_port() here, since we want the
+            # websocket port, not the web server port. (These are the same in
+            # prod, but different in dev)
+            manifest.server_port = config.get_option("browser.serverPort")
+            manifest.server_base_path = config.get_option("server.baseUrlPath")
+        else:
+            manifest.num_messages = num_messages
+
+        return manifest
 
     def request_rerun(self, client_state: ClientState | None) -> None:
         """Signal that we're interested in running the script.
@@ -469,6 +657,13 @@ class AppSession:
             self._local_sources_watcher.update_watched_pages()
 
     def _clear_queue(self) -> None:
+        # Master_queue retains its initial message; browser_queue is
+        # completely cleared.
+        initial_msg = self._master_queue.get_initial_msg()
+        self._master_queue.clear(retain_lifecycle_msgs=True)
+        if initial_msg:
+            self._master_queue.enqueue(initial_msg)
+
         self._browser_queue.clear(retain_lifecycle_msgs=True)
 
     def _on_scriptrunner_event(
@@ -939,3 +1134,14 @@ def _populate_theme_msg(msg: CustomThemeConfig) -> None:
 def _populate_user_info_msg(msg: UserInfo) -> None:
     msg.installation_id = Installation.instance().installation_id
     msg.installation_id_v3 = Installation.instance().installation_id_v3
+
+
+def _should_save_report_msg(msg):
+    """Returns True if the given ForwardMsg should be serialized into
+    a shared report.
+    We serialize report & session metadata and deltas, but not transient
+    events such as upload progress.
+    """
+
+    msg_type = msg.WhichOneof("type")
+    return msg_type == "initialize" or msg_type == "new_report" or msg_type == "delta"

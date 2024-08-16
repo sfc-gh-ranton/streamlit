@@ -25,6 +25,7 @@ import {
 import { ConnectionState } from "@streamlit/app/src/connection/ConnectionState"
 
 interface Props {
+  baseReportUrl: string
   scriptRunId: string
 
   /** Manifest protobuf from the server. */
@@ -58,6 +59,7 @@ export class StaticConnection {
       try {
         // eslint-disable-next-line no-await-in-loop
         const response = await getReportObject(
+          props.baseReportUrl,
           props.scriptRunId,
           `${msgIdx}.pb`
         )

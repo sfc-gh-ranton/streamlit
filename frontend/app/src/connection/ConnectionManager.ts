@@ -230,52 +230,29 @@ export class ConnectionManager {
   private async connectBasedOnManifest(
     scriptRunId: string
   ): Promise<WebsocketConnection | StaticConnection> {
-    const manifest = await ConnectionManager.fetchManifest(scriptRunId)
+    const baseReportUrl = "http://localhost:3001" // TODO: put in config.
+    // This is fetching the index as HTML instead of manifest.pb
+    const manifest = await ConnectionManager.fetchManifest(
+      baseReportUrl,
+      scriptRunId
+    )
+    console.log(`Connecting based on manifest: ${JSON.stringify(manifest)}`) // TODO:
 
-    return manifest.serverStatus === StaticManifest.ServerStatus.RUNNING
-      ? this.connectToRunningServerFromManifest(manifest)
-      : this.connectToStaticReportFromManifest(scriptRunId, manifest)
-  }
-
-  private connectToRunningServerFromManifest(
-    manifest: any
-  ): WebsocketConnection {
-    const {
-      configuredServerAddress,
-      internalServerIP,
-      externalServerIP,
-      serverPort,
-      serverBasePath,
-    } = manifest
-
-    const parts = { port: serverPort, basePath: serverBasePath }
-
-    const baseUriPartsList = configuredServerAddress
-      ? [{ ...parts, host: configuredServerAddress }]
-      : [
-          { ...parts, host: externalServerIP },
-          { ...parts, host: internalServerIP },
-        ]
-
-    return new WebsocketConnection({
-      sessionInfo: this.props.sessionInfo,
-      endpoints: this.props.endpoints,
-      baseUriPartsList,
-      onMessage: this.props.onMessage,
-      onConnectionStateChange: s => this.setConnectionState(s),
-      onRetry: this.showRetryError,
-      claimHostAuthToken: this.props.claimHostAuthToken,
-      resetHostAuthToken: this.props.resetHostAuthToken,
-      onHostConfigResp: this.props.onHostConfigResp,
-    })
+    return this.connectToStaticReportFromManifest(
+      baseReportUrl,
+      scriptRunId,
+      manifest
+    )
   }
 
   private connectToStaticReportFromManifest(
+    baseReportUrl: string,
     scriptRunId: string,
     manifest: StaticManifest
   ): StaticConnection {
     return new StaticConnection({
       manifest,
+      baseReportUrl,
       scriptRunId,
       onMessage: this.props.onMessage,
       onConnectionStateChange: s => this.setConnectionState(s),
@@ -283,10 +260,15 @@ export class ConnectionManager {
   }
 
   private static async fetchManifest(
+    baseReportUrl: string,
     scriptRunId: string
   ): Promise<StaticManifest> {
     try {
-      const data = await getReportObject(scriptRunId, "manifest.pb")
+      const data = await getReportObject(
+        baseReportUrl,
+        scriptRunId,
+        "manifest.pb"
+      )
       const arrayBuffer = await data.arrayBuffer()
 
       return StaticManifest.decode(new Uint8Array(arrayBuffer))

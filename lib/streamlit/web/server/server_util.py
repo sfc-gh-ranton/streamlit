@@ -53,6 +53,7 @@ def is_url_from_allowed_origins(url: str) -> bool:
         # manually specified a server address.
         _get_server_address_if_manually_set,
         # Then try the options that depend on HTTP requests or opening sockets.
+        _get_s3_url_host_if_manually_set,
         net_util.get_internal_ip,
         net_util.get_external_ip,
     ]
@@ -73,6 +74,12 @@ def is_url_from_allowed_origins(url: str) -> bool:
 def _get_server_address_if_manually_set() -> str | None:
     if config.is_manually_set("browser.serverAddress"):
         return url_util.get_hostname(config.get_option("browser.serverAddress"))
+    return None
+
+
+def _get_s3_url_host_if_manually_set() -> str | None:
+    if config.is_manually_set("s3.url"):
+        return url_util.get_hostname(config.get_option("s3.url"))
     return None
 
 

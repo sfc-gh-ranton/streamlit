@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Final, Literal
 from urllib.parse import urlparse
@@ -97,3 +98,7 @@ def is_url(
     except ValueError:
         return False
     return False
+
+
+def print_url(title, url):
+    logging.info(f"{title}: {url}")
