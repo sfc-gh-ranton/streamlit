@@ -14,9 +14,9 @@
 
 """Handles a connecton to an S3 bucket to send Report data."""
 
-import asyncio
 import hashlib
 import os
+import threading
 
 import base58
 
@@ -45,7 +45,8 @@ class AbstractStorage:
             streamlit.__version__,
             base58.b58encode(md5.digest()[:3]).decode("utf-8"),
         )
-        self._write_lock = asyncio.Lock()
+        # this is not called in a way that plays nice with asyncio currently
+        self._write_lock = threading.Lock()
 
     def __repr__(self) -> str:
         return util.repr_(self)
@@ -89,15 +90,16 @@ class AbstractStorage:
             the url for the saved report.
 
         """
-        # return_value = None
-        async with self._write_lock:
+        return_value = None
+        with self._write_lock:
             return_value = self._save_report_files(
                 session_id,
                 files,
                 progress_coroutine=progress_coroutine,
                 manifest_save_order=manifest_save_order,
             )
-            return return_value
+
+        return return_value
 
     def _save_report_files(
         self, session_id, files, progress_coroutine=None, manifest_save_order=None

@@ -291,6 +291,7 @@ class AppSession:
         try:
             msg_type = msg.WhichOneof("type")
             if msg_type == "cloud_upload":
+                # TODO: await this
                 self.handle_save_request()
             elif msg_type == "rerun_script":
                 if msg.debug_last_backmsg_id:
